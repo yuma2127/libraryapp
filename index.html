@@ -1,0 +1,759 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>図書貸出管理アプリ - libraryapp</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons CDN -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+        .glass-header {
+            background: rgba(15, 23, 42, 0.92);
+            backdrop-filter: blur(12px);
+        }
+    </style>
+</head>
+<body class="bg-slate-100 text-slate-800 min-h-screen flex flex-col antialiased">
+
+    <!-- Toast Notification Container -->
+    <div id="toast-container" class="fixed top-5 right-5 z-50 flex flex-col gap-2.5 max-w-sm w-full pointer-events-none px-4 sm:px-0"></div>
+
+    <!-- Modal Container for Custom Confirm/Edit -->
+    <div id="modal-container" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-40 hidden flex items-center justify-center p-4">
+        <div id="modal-content" class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 transition-all transform scale-95 opacity-0 border border-slate-100"></div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div id="loading-overlay" class="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-30 flex items-center justify-center">
+        <div class="bg-white p-6 rounded-2xl shadow-xl flex items-center gap-4 border border-slate-100">
+            <i class="fa-solid fa-spinner fa-spin text-teal-600 text-3xl"></i>
+            <div>
+                <p class="font-bold text-slate-800 text-base">データを読み込み中...</p>
+                <p class="text-xs text-slate-500">少々お待ちください</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Navigation Header -->
+    <header class="glass-header text-white shadow-lg sticky top-0 z-20 border-b border-slate-800">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="bg-teal-500/20 border border-teal-400/30 p-2.5 rounded-xl flex items-center justify-center text-teal-400">
+                    <i class="fa-solid fa-book-open text-xl"></i>
+                </div>
+                <div>
+                    <h1 class="text-lg sm:text-xl font-bold tracking-tight text-white flex items-center gap-2">
+                        図書貸出管理アプリ
+                        <span class="text-xs font-normal bg-teal-500/20 text-teal-300 border border-teal-500/30 px-2 py-0.5 rounded-full hidden sm:inline-block">libraryapp</span>
+                    </h1>
+                    <p class="text-xs text-slate-400">学校図書室 貸出・返却記録システム</p>
+                </div>
+            </div>
+
+            <!-- User Info (Hidden when logged out) -->
+            <div id="user-profile" class="hidden flex items-center gap-3">
+                <img id="user-avatar" src="" alt="User Avatar" class="w-9 h-9 rounded-full border-2 border-teal-400 object-cover shadow-sm">
+                <div class="hidden sm:block text-right">
+                    <div id="user-name" class="text-xs font-bold leading-tight text-slate-100">ユーザー名</div>
+                    <div id="user-email" class="text-[10px] text-slate-400">user@example.com</div>
+                </div>
+                <button id="btn-logout" class="ml-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 px-3 py-1.5 rounded-xl text-xs font-medium transition duration-150 flex items-center gap-1.5 shadow-sm active:scale-95">
+                    <i class="fa-solid fa-right-from-bracket text-rose-400"></i>
+                    <span class="hidden sm:inline">ログアウト</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+
+        <!-- LOGIN VIEW (Shown when unauthenticated) -->
+        <section id="login-view" class="hidden flex flex-col items-center justify-center py-12 sm:py-20">
+            <div class="bg-white p-8 sm:p-10 rounded-3xl shadow-xl border border-slate-200/80 max-w-md w-full text-center relative overflow-hidden">
+                <div class="absolute -top-12 -right-12 w-32 h-32 bg-teal-100 rounded-full blur-2xl opacity-60"></div>
+                <div class="absolute -bottom-12 -left-12 w-32 h-32 bg-indigo-100 rounded-full blur-2xl opacity-60"></div>
+
+                <div class="w-20 h-20 bg-teal-50 text-teal-600 border border-teal-100 rounded-3xl flex items-center justify-center mx-auto mb-6 text-3xl shadow-sm">
+                    <i class="fa-solid fa-book-bookmark"></i>
+                </div>
+                <h2 class="text-2xl font-bold text-slate-800 mb-2">図書貸出管理へようこそ</h2>
+                <p class="text-slate-500 text-xs sm:text-sm mb-8 leading-relaxed">
+                    本アプリを利用するにはGoogleアカウントでのログインが必要です。<br>学校・図書室のアカウントでログインしてください。
+                </p>
+
+                <button id="btn-login" class="w-full bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-semibold py-3.5 px-4 rounded-xl shadow-sm transition duration-200 flex items-center justify-center gap-3 hover:border-slate-400 active:scale-[0.99] border-b-2">
+                    <svg class="w-5 h-5" viewBox="0 0 24 24">
+                        <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                        <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                        <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+                        <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+                    </svg>
+                    <span>Googleでログインする</span>
+                </button>
+            </div>
+        </section>
+
+        <!-- APP DASHBOARD VIEW (Shown when authenticated) -->
+        <section id="app-view" class="hidden space-y-6">
+
+            <!-- Summary KPI Cards -->
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+                <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm flex items-center justify-between">
+                    <div>
+                        <p class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">総登録件数</p>
+                        <p id="kpi-total" class="text-xl sm:text-2xl font-extrabold text-slate-800 mt-0.5">0 冊</p>
+                    </div>
+                    <div class="w-10 h-10 bg-slate-100 text-slate-600 rounded-xl flex items-center justify-center text-lg">
+                        <i class="fa-solid fa-books"></i>
+                    </div>
+                </div>
+
+                <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm flex items-center justify-between">
+                    <div>
+                        <p class="text-[11px] font-bold text-amber-500 uppercase tracking-wider">貸出中 (未返却)</p>
+                        <p id="kpi-active" class="text-xl sm:text-2xl font-extrabold text-amber-600 mt-0.5">0 冊</p>
+                    </div>
+                    <div class="w-10 h-10 bg-amber-50 text-amber-600 rounded-xl flex items-center justify-center text-lg">
+                        <i class="fa-solid fa-clock"></i>
+                    </div>
+                </div>
+
+                <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm flex items-center justify-between">
+                    <div>
+                        <p class="text-[11px] font-bold text-rose-500 uppercase tracking-wider">返却延滞中</p>
+                        <p id="kpi-overdue" class="text-xl sm:text-2xl font-extrabold text-rose-600 mt-0.5">0 冊</p>
+                    </div>
+                    <div class="w-10 h-10 bg-rose-50 text-rose-600 rounded-xl flex items-center justify-center text-lg">
+                        <i class="fa-solid fa-triangle-exclamation"></i>
+                    </div>
+                </div>
+
+                <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm flex items-center justify-between">
+                    <div>
+                        <p class="text-[11px] font-bold text-emerald-500 uppercase tracking-wider">返却済み</p>
+                        <p id="kpi-returned" class="text-xl sm:text-2xl font-extrabold text-emerald-600 mt-0.5">0 冊</p>
+                    </div>
+                    <div class="w-10 h-10 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center text-lg">
+                        <i class="fa-solid fa-circle-check"></i>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+
+                <!-- Book Entry Form -->
+                <div class="lg:col-span-5 bg-white p-5 sm:p-6 rounded-2xl border border-slate-200/80 shadow-sm">
+                    <div class="flex items-center gap-2.5 mb-5 pb-3 border-b border-slate-100">
+                        <div class="w-8 h-8 bg-teal-50 text-teal-600 rounded-lg flex items-center justify-center font-bold">
+                            <i class="fa-solid fa-plus"></i>
+                        </div>
+                        <div>
+                            <h2 class="text-base font-bold text-slate-800">新規貸出の記録</h2>
+                            <p class="text-xs text-slate-400">図書の貸出情報を入力してください</p>
+                        </div>
+                    </div>
+
+                    <form id="library-form" class="space-y-4">
+                        <!-- 1. 書名 -->
+                        <div>
+                            <label for="input-book" class="block text-xs font-semibold text-slate-600 mb-1">
+                                書名 <span class="text-rose-500">*</span>
+                            </label>
+                            <input type="text" id="input-book" required placeholder="例: 走れメロス, こころ" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition">
+                        </div>
+
+                        <!-- 2. 借りた人の名前 -->
+                        <div>
+                            <label for="input-borrower" class="block text-xs font-semibold text-slate-600 mb-1">
+                                借りた人の名前 <span class="text-rose-500">*</span>
+                            </label>
+                            <input type="text" id="input-borrower" required placeholder="例: 山田 太郎" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition">
+                        </div>
+
+                        <!-- 3 & 4. 貸出日 / 返却予定日 -->
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label for="input-checkout-date" class="block text-xs font-semibold text-slate-600 mb-1">
+                                    貸出日 <span class="text-rose-500">*</span>
+                                </label>
+                                <input type="date" id="input-checkout-date" required class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition">
+                            </div>
+                            <div>
+                                <label for="input-due-date" class="block text-xs font-semibold text-slate-600 mb-1">
+                                    返却予定日 <span class="text-rose-500">*</span>
+                                </label>
+                                <input type="date" id="input-due-date" required class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition">
+                            </div>
+                        </div>
+
+                        <!-- 5. 返却状況 -->
+                        <div>
+                            <label for="input-status" class="block text-xs font-semibold text-slate-600 mb-1">
+                                返却状況 <span class="text-rose-500">*</span>
+                            </label>
+                            <select id="input-status" required class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition">
+                                <option value="未返却" selected>未返却 (貸出中)</option>
+                                <option value="返却済み">返却済み</option>
+                            </select>
+                        </div>
+
+                        <!-- Submit Button -->
+                        <button type="submit" id="btn-submit" class="w-full bg-teal-600 hover:bg-teal-700 text-white font-semibold py-3 px-4 rounded-xl shadow-sm hover:shadow transition active:scale-[0.99] flex items-center justify-center gap-2 mt-2">
+                            <i class="fa-solid fa-plus-circle"></i>
+                            <span>貸出記録を登録する</span>
+                        </button>
+                    </form>
+                </div>
+
+                <!-- Borrowing Record Table & Filter Section -->
+                <div class="lg:col-span-7 bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden flex flex-col">
+                    <!-- Controls Bar -->
+                    <div class="p-4 sm:p-5 border-b border-slate-100 bg-slate-50/50 space-y-3">
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                            <h2 class="text-base font-bold text-slate-800 flex items-center gap-2">
+                                <i class="fa-solid fa-list-check text-teal-600"></i>
+                                貸出記録一覧
+                            </h2>
+                            <span id="record-count-badge" class="text-xs font-medium text-slate-500 bg-slate-200 px-2.5 py-1 rounded-full w-max">
+                                全 0 件
+                            </span>
+                        </div>
+
+                        <!-- Filters & Search -->
+                        <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+                            <!-- Filter Tabs -->
+                            <div class="inline-flex bg-slate-200/80 p-1 rounded-xl text-xs font-medium self-start sm:self-auto">
+                                <button id="filter-all" class="filter-btn px-3 py-1.5 rounded-lg bg-white text-slate-800 shadow-xs font-bold transition">すべて</button>
+                                <button id="filter-active" class="filter-btn px-3 py-1.5 rounded-lg text-slate-600 hover:text-slate-900 transition">未返却のみ</button>
+                                <button id="filter-overdue" class="filter-btn px-3 py-1.5 rounded-lg text-slate-600 hover:text-slate-900 transition">延滞のみ</button>
+                            </div>
+
+                            <!-- Search Box -->
+                            <div class="relative flex-grow">
+                                <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                                <input type="text" id="filter-search" placeholder="書名や借りた人で検索..." class="w-full pl-8 pr-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Table View -->
+                    <div class="overflow-x-auto min-h-[300px]">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr class="bg-slate-100/70 border-b border-slate-200 text-slate-500 text-[11px] font-bold uppercase tracking-wider">
+                                    <th class="py-3 px-4">書名</th>
+                                    <th class="py-3 px-4">借りた人</th>
+                                    <th class="py-3 px-4 whitespace-nowrap">貸出日</th>
+                                    <th class="py-3 px-4 whitespace-nowrap">返却予定日</th>
+                                    <th class="py-3 px-4 text-center">状況</th>
+                                    <th class="py-3 px-4 text-center">操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="library-table-body" class="divide-y divide-slate-100 text-xs sm:text-sm">
+                                <!-- Dynamic Rows -->
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Empty State -->
+                    <div id="empty-state" class="hidden py-16 text-center text-slate-400 flex flex-col items-center justify-center">
+                        <i class="fa-regular fa-folder-open text-4xl mb-3 text-slate-300"></i>
+                        <p class="text-sm font-medium text-slate-500">該当する貸出記録が見つかりません</p>
+                        <p class="text-xs text-slate-400 mt-1">新規に登録するか、検索・フィルター条件を変更してください</p>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+    </main>
+
+    <footer class="bg-slate-900 text-slate-400 border-t border-slate-800 py-4 mt-auto text-xs">
+        <div class="max-w-7xl mx-auto px-4 text-center flex flex-col sm:flex-row items-center justify-between gap-2">
+            <div>&copy; 2026 図書貸出管理アプリ (libraryapp) - 学校図書室</div>
+            <div class="text-[11px] text-slate-500">Firebase Firestore & Authentication 連携</div>
+        </div>
+    </footer>
+
+    <!-- Firebase Module JS -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.4.0/firebase-app.js";
+        import { 
+            getAuth, 
+            GoogleAuthProvider, 
+            signInWithPopup, 
+            signOut, 
+            onAuthStateChanged 
+        } from "https://www.gstatic.com/firebasejs/11.4.0/firebase-auth.js";
+        import { 
+            getFirestore, 
+            collection, 
+            addDoc, 
+            deleteDoc, 
+            updateDoc, 
+            doc, 
+            onSnapshot, 
+            serverTimestamp 
+        } from "https://www.gstatic.com/firebasejs/11.4.0/firebase-firestore.js";
+
+        // Firebase Configuration (指定された項目)
+        const firebaseConfig = {
+            apiKey: "AIzaSyBl2fSpnPt7y_FSaVYp-IpBS5SYn_ZiyMw",
+            authDomain: "libraryapp-71318.firebaseapp.com",
+            projectId: "libraryapp-71318",
+            storageBucket: "libraryapp-71318.firebasestorage.app",
+            messagingSenderId: "962454563482",
+            appId: "1:962454563482:web:c09558f72af5e8acdb4d23"
+        };
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        const googleProvider = new GoogleAuthProvider();
+
+        // Application State
+        let currentUser = null;
+        let allRecords = [];
+        let unsubscribeStore = null;
+        let currentFilter = 'all'; // 'all', 'active', 'overdue'
+
+        // DOM Elements
+        const loadingOverlay = document.getElementById('loading-overlay');
+        const loginView = document.getElementById('login-view');
+        const appView = document.getElementById('app-view');
+        const userProfile = document.getElementById('user-profile');
+        const userAvatar = document.getElementById('user-avatar');
+        const userName = document.getElementById('user-name');
+        const userEmail = document.getElementById('user-email');
+
+        const btnLogin = document.getElementById('btn-login');
+        const btnLogout = document.getElementById('btn-logout');
+
+        const libraryForm = document.getElementById('library-form');
+        const inputBook = document.getElementById('input-book');
+        const inputBorrower = document.getElementById('input-borrower');
+        const inputCheckoutDate = document.getElementById('input-checkout-date');
+        const inputDueDate = document.getElementById('input-due-date');
+        const inputStatus = document.getElementById('input-status');
+
+        const filterSearch = document.getElementById('filter-search');
+        const filterAllBtn = document.getElementById('filter-all');
+        const filterActiveBtn = document.getElementById('filter-active');
+        const filterOverdueBtn = document.getElementById('filter-overdue');
+
+        const tableBody = document.getElementById('library-table-body');
+        const emptyState = document.getElementById('empty-state');
+        const recordCountBadge = document.getElementById('record-count-badge');
+
+        const kpiTotal = document.getElementById('kpi-total');
+        const kpiActive = document.getElementById('kpi-active');
+        const kpiOverdue = document.getElementById('kpi-overdue');
+        const kpiReturned = document.getElementById('kpi-returned');
+
+        // Set Default Dates: Today for Checkout, 14 days later for Due Date
+        function setupDefaultDates() {
+            const today = new Date();
+            const todayStr = today.toISOString().split('T')[0];
+            
+            const twoWeeksLater = new Date();
+            twoWeeksLater.setDate(today.getDate() + 14);
+            const dueStr = twoWeeksLater.toISOString().split('T')[0];
+
+            inputCheckoutDate.value = todayStr;
+            inputDueDate.value = dueStr;
+        }
+
+        setupDefaultDates();
+
+        // Toast Notification Function
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+
+            const bgClass = type === 'success' ? 'bg-teal-600 text-white' : 
+                            type === 'error' ? 'bg-rose-600 text-white' : 
+                            'bg-slate-800 text-white';
+            
+            const iconClass = type === 'success' ? 'fa-circle-check text-emerald-300' : 
+                              type === 'error' ? 'fa-triangle-exclamation text-rose-200' : 
+                              'fa-circle-info text-teal-300';
+
+            toast.className = `${bgClass} p-3.5 rounded-xl shadow-lg flex items-center justify-between gap-3 text-xs sm:text-sm transition-all duration-300 transform translate-x-10 opacity-0 border border-white/10 pointer-events-auto`;
+            toast.innerHTML = `
+                <div class="flex items-center gap-2.5">
+                    <i class="fa-solid ${iconClass} text-base"></i>
+                    <span class="font-medium">${escapeHtml(message)}</span>
+                </div>
+            `;
+
+            container.appendChild(toast);
+
+            requestAnimationFrame(() => {
+                toast.classList.remove('translate-x-10', 'opacity-0');
+            });
+
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'translate-x-10');
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        // Custom Modal Confirmation (Replaces native confirm)
+        function showModal({ title, body, confirmText = '実行', confirmClass = 'bg-teal-600', onConfirm }) {
+            const modalContainer = document.getElementById('modal-container');
+            const modalContent = document.getElementById('modal-content');
+
+            modalContent.innerHTML = `
+                <h3 class="text-base font-bold text-slate-800 mb-2">${escapeHtml(title)}</h3>
+                <div class="text-xs sm:text-sm text-slate-600 mb-6 leading-relaxed">${body}</div>
+                <div class="flex items-center justify-end gap-2.5">
+                    <button id="modal-cancel" class="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-semibold transition">キャンセル</button>
+                    <button id="modal-confirm" class="${confirmClass} text-white px-4 py-2 rounded-xl text-xs font-semibold hover:opacity-90 transition shadow-sm">${confirmText}</button>
+                </div>
+            `;
+
+            modalContainer.classList.remove('hidden');
+            requestAnimationFrame(() => {
+                modalContent.classList.remove('scale-95', 'opacity-0');
+            });
+
+            const closeModal = () => {
+                modalContent.classList.add('scale-95', 'opacity-0');
+                setTimeout(() => modalContainer.classList.add('hidden'), 200);
+            };
+
+            document.getElementById('modal-cancel').onclick = closeModal;
+            document.getElementById('modal-confirm').onclick = async () => {
+                if (onConfirm) await onConfirm();
+                closeModal();
+            };
+        }
+
+        // Auth Listener
+        onAuthStateChanged(auth, (user) => {
+            loadingOverlay.classList.add('hidden');
+            if (user) {
+                currentUser = user;
+                userAvatar.src = user.photoURL || 'https://via.placeholder.com/40';
+                userName.textContent = user.displayName || 'ユーザー';
+                userEmail.textContent = user.email || '';
+
+                // Pre-fill borrower name with logged in user name if empty
+                if (!inputBorrower.value) {
+                    inputBorrower.value = user.displayName || '';
+                }
+
+                loginView.classList.add('hidden');
+                appView.classList.remove('hidden');
+                userProfile.classList.remove('hidden');
+
+                // Subscribe to Firestore Realtime Updates
+                subscribeToLibraryData();
+                showToast(`${user.displayName || 'ユーザー'}さん、ログインしました`, 'success');
+            } else {
+                currentUser = null;
+                if (unsubscribeStore) unsubscribeStore();
+
+                loginView.classList.remove('hidden');
+                appView.classList.add('hidden');
+                userProfile.classList.add('hidden');
+            }
+        });
+
+        // Google Login Action
+        btnLogin.addEventListener('click', async () => {
+            try {
+                loadingOverlay.classList.remove('hidden');
+                await signInWithPopup(auth, googleProvider);
+            } catch (error) {
+                loadingOverlay.classList.add('hidden');
+                console.error("Login Error:", error);
+                showToast("ログインに失敗しました: " + error.message, 'error');
+            }
+        });
+
+        // Logout Action
+        btnLogout.addEventListener('click', () => {
+            showModal({
+                title: "ログアウトの確認",
+                body: "ログアウトしてもよろしいですか？",
+                confirmText: "ログアウト",
+                confirmClass: "bg-rose-600",
+                onConfirm: async () => {
+                    await signOut(auth);
+                    showToast("ログアウトしました", 'info');
+                }
+            });
+        });
+
+        // Firestore Realtime Subscription
+        function subscribeToLibraryData() {
+            const libraryRef = collection(db, "borrowings");
+
+            unsubscribeStore = onSnapshot(libraryRef, (snapshot) => {
+                allRecords = snapshot.docs.map(docSnap => ({
+                    id: docSnap.id,
+                    ...docSnap.data()
+                }));
+
+                // Sort by dueDate ascending (urgent due dates first)
+                allRecords.sort((a, b) => {
+                    if (a.status !== b.status) {
+                        return a.status === '未返却' ? -1 : 1;
+                    }
+                    return new Date(a.dueDate) - new Date(b.dueDate);
+                });
+
+                renderDashboard();
+            }, (error) => {
+                console.error("Firestore error:", error);
+                showToast("データの更新取得に失敗しました", 'error');
+            });
+        }
+
+        // Form Submit: Add Record
+        libraryForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            if (!currentUser) {
+                showToast("ログインが必要です", 'error');
+                return;
+            }
+
+            const bookName = inputBook.value.trim();
+            const borrowerName = inputBorrower.value.trim();
+            const checkoutDate = inputCheckoutDate.value;
+            const dueDate = inputDueDate.value;
+            const status = inputStatus.value;
+
+            // Form Validation
+            if (!bookName) {
+                showToast("書名を入力してください", 'error');
+                return;
+            }
+            if (!borrowerName) {
+                showToast("借りた人の名前を入力してください", 'error');
+                return;
+            }
+            if (!checkoutDate || !dueDate) {
+                showToast("日付を正確に指定してください", 'error');
+                return;
+            }
+            if (new Date(dueDate) < new Date(checkoutDate)) {
+                showToast("返却予定日は貸出日以降の日付を指定してください", 'error');
+                return;
+            }
+
+            try {
+                const btnSubmit = document.getElementById('btn-submit');
+                btnSubmit.disabled = true;
+                btnSubmit.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> 登録中...`;
+
+                await addDoc(collection(db, "borrowings"), {
+                    bookName,
+                    borrowerName,
+                    checkoutDate,
+                    dueDate,
+                    status,
+                    registeredByUid: currentUser.uid,
+                    registeredByName: currentUser.displayName || 'ユーザー',
+                    createdAt: serverTimestamp()
+                });
+
+                showToast("貸出記録を追加しました！", 'success');
+
+                // Reset inputs
+                inputBook.value = '';
+                setupDefaultDates();
+                inputStatus.value = '未返却';
+
+            } catch (error) {
+                console.error("Add record error:", error);
+                showToast("登録に失敗しました: " + error.message, 'error');
+            } fontFinally()
+        });
+
+        function fontFinally() {
+            const btnSubmit = document.getElementById('btn-submit');
+            btnSubmit.disabled = false;
+            btnSubmit.innerHTML = `<i class="fa-solid fa-plus-circle"></i><span>貸出記録を登録する</span>`;
+        }
+
+        // Global Toggle Return Status Action
+        window.toggleStatus = async function(id, currentStatus) {
+            const newStatus = currentStatus === '未返却' ? '返却済み' : '未返却';
+            try {
+                await updateDoc(doc(db, "borrowings", id), {
+                    status: newStatus,
+                    updatedAt: serverTimestamp()
+                });
+                showToast(`返却状況を「${newStatus}」に変更しました`, 'success');
+            } catch (error) {
+                console.error("Update status error:", error);
+                showToast("状況の更新に失敗しました", 'error');
+            }
+        };
+
+        // Global Delete Record Action
+        window.deleteRecord = function(id, bookName) {
+            showModal({
+                title: "記録の削除確認",
+                body: `「<strong>${escapeHtml(bookName)}</strong>」の貸出記録を削除しますか？<br>この操作は取り消せません。`,
+                confirmText: "削除する",
+                confirmClass: "bg-rose-600",
+                onConfirm: async () => {
+                    try {
+                        await deleteDoc(doc(db, "borrowings", id));
+                        showToast("記録を削除しました", 'info');
+                    } catch (error) {
+                        console.error("Delete record error:", error);
+                        showToast("削除に失敗しました", 'error');
+                    }
+                }
+            });
+        };
+
+        // Dashboard Render Logic
+        function renderDashboard() {
+            const searchKeyword = filterSearch.value.trim().toLowerCase();
+            const todayStr = new Date().toISOString().split('T')[0];
+
+            // KPI Counts
+            let totalCount = allRecords.length;
+            let activeCount = 0;
+            let overdueCount = 0;
+            let returnedCount = 0;
+
+            allRecords.forEach(r => {
+                if (r.status === '返却済み') {
+                    returnedCount++;
+                } else {
+                    activeCount++;
+                    if (r.dueDate < todayStr) {
+                        overdueCount++;
+                    }
+                }
+            });
+
+            kpiTotal.textContent = `${totalCount} 冊`;
+            kpiActive.textContent = `${activeCount} 冊`;
+            kpiOverdue.textContent = `${overdueCount} 冊`;
+            kpiReturned.textContent = `${returnedCount} 冊`;
+
+            // Filter Records
+            const filtered = allRecords.filter(item => {
+                // Filter Tab Match
+                let matchesTab = true;
+                const isOverdue = item.status === '未返却' && item.dueDate < todayStr;
+
+                if (currentFilter === 'active') {
+                    matchesTab = item.status === '未返却';
+                } else if (currentFilter === 'overdue') {
+                    matchesTab = isOverdue;
+                }
+
+                // Search Keyword Match (Book name or Borrower)
+                const matchesSearch = item.bookName?.toLowerCase().includes(searchKeyword) ||
+                                      item.borrowerName?.toLowerCase().includes(searchKeyword);
+
+                return matchesTab && matchesSearch;
+            });
+
+            recordCountBadge.textContent = `表示中 ${filtered.length} / 全 ${totalCount} 件`;
+
+            // Render Table Rows
+            tableBody.innerHTML = '';
+
+            if (filtered.length === 0) {
+                emptyState.classList.remove('hidden');
+            } else {
+                emptyState.classList.add('hidden');
+
+                filtered.forEach(item => {
+                    const tr = document.createElement('tr');
+                    const isOverdue = item.status === '未返却' && item.dueDate < todayStr;
+
+                    // Row styling logic
+                    if (isOverdue) {
+                        tr.className = 'bg-rose-50/60 hover:bg-rose-100/50 transition duration-150';
+                    } else if (item.status === '返却済み') {
+                        tr.className = 'bg-slate-50/50 text-slate-400 hover:bg-slate-100/50 transition duration-150';
+                    } else {
+                        tr.className = 'hover:bg-slate-50 transition duration-150';
+                    }
+
+                    tr.innerHTML = `
+                        <td class="py-3 px-4 font-semibold ${item.status === '返却済み' ? 'text-slate-500 line-through' : 'text-slate-800'}">
+                            ${escapeHtml(item.bookName)}
+                        </td>
+                        <td class="py-3 px-4 font-medium text-slate-600">
+                            <i class="fa-regular fa-user text-slate-400 text-xs mr-1"></i>${escapeHtml(item.borrowerName)}
+                        </td>
+                        <td class="py-3 px-4 whitespace-nowrap text-slate-500 text-xs">${item.checkoutDate || '-'}</td>
+                        <td class="py-3 px-4 whitespace-nowrap text-xs ${isOverdue ? 'font-bold text-rose-600' : 'text-slate-600'}">
+                            ${item.dueDate || '-'}
+                            ${isOverdue ? '<span class="ml-1 text-[10px] bg-rose-600 text-white px-1.5 py-0.5 rounded-full font-bold">延滞</span>' : ''}
+                        </td>
+                        <td class="py-3 px-4 text-center whitespace-nowrap">
+                            ${item.status === '返却済み' 
+                                ? `<span class="inline-flex items-center gap-1 bg-emerald-100 text-emerald-700 text-xs font-semibold px-2.5 py-1 rounded-full border border-emerald-200">
+                                     <i class="fa-solid fa-check text-[10px]"></i> 返却済み
+                                   </span>`
+                                : isOverdue
+                                ? `<span class="inline-flex items-center gap-1 bg-rose-100 text-rose-700 text-xs font-bold px-2.5 py-1 rounded-full border border-rose-300">
+                                     <i class="fa-solid fa-exclamation text-[10px]"></i> 未返却 (延滞)
+                                   </span>`
+                                : `<span class="inline-flex items-center gap-1 bg-amber-100 text-amber-800 text-xs font-semibold px-2.5 py-1 rounded-full border border-amber-200">
+                                     <i class="fa-solid fa-clock text-[10px]"></i> 未返却
+                                   </span>`
+                            }
+                        </td>
+                        <td class="py-3 px-4 text-center whitespace-nowrap">
+                            <div class="inline-flex items-center gap-1.5">
+                                <button onclick="toggleStatus('${item.id}', '${item.status}')" title="${item.status === '未返却' ? '返却済みに変更' : '未返却に戻す'}" class="px-2.5 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1 border ${item.status === '未返却' ? 'bg-emerald-600 hover:bg-teal-700 text-white border-emerald-600 shadow-xs' : 'bg-slate-200 hover:bg-slate-300 text-slate-700 border-slate-300'}">
+                                    <i class="fa-solid ${item.status === '未返却' ? 'fa-check' : 'fa-rotate-left'}"></i>
+                                    <span>${item.status === '未返却' ? '返却処理' : '戻す'}</span>
+                                </button>
+                                <button onclick="deleteRecord('${item.id}', '${escapeHtml(item.bookName)}')" title="削除" class="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-slate-200/60 transition">
+                                    <i class="fa-solid fa-trash-can"></i>
+                                </button>
+                            </div>
+                        </td>
+                    `;
+                    tableBody.appendChild(tr);
+                });
+            }
+        }
+
+        // Filter Tab Buttons Click Events
+        function setFilter(filterType, targetBtn) {
+            currentFilter = filterType;
+            document.querySelectorAll('.filter-btn').forEach(btn => {
+                btn.className = 'filter-btn px-3 py-1.5 rounded-lg text-slate-600 hover:text-slate-900 transition font-medium';
+            });
+            targetBtn.className = 'filter-btn px-3 py-1.5 rounded-lg bg-white text-slate-800 shadow-xs font-bold transition';
+            renderDashboard();
+        }
+
+        filterAllBtn.addEventListener('click', (e) => setFilter('all', e.target));
+        filterActiveBtn.addEventListener('click', (e) => setFilter('active', e.target));
+        filterOverdueBtn.addEventListener('click', (e) => setFilter('overdue', e.target));
+        filterSearch.addEventListener('input', renderDashboard);
+
+        // Escape HTML Utility Function
+        function escapeHtml(str) {
+            if (!str) return '';
+            return String(str)
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+    </script>
+</body>
+</html>
